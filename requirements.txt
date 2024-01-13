@@ -1,0 +1,8 @@
+beautifulsoup4
+html5lib
+httplib2
+requests
+urllib3
+pandas
+tqdm
+geopy
