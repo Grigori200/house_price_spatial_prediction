@@ -30,7 +30,7 @@ def address2location(api_key: str, address: str) -> tuple[float, float]:
     geocoding_data = geocoding_response.json()
 
     if geocoding_response.status_code != 200 or geocoding_data.get("status") != "OK":
-        raise Exception(f'{geocoding_response.status_code} | {geocoding_data.get("status")} | Cannot find coordinates for {address}')
+        raise Exception(f'Cannot find coordinates for {address}')
 
     location = geocoding_data["results"][0]["geometry"]["location"]
     return location['lat'], location['lng']
@@ -102,11 +102,11 @@ if __name__ == "__main__":
              'train_station',
              'transit_station']
     df = pd.read_csv('oto.csv', index_col=0)
-    df = df.drop_duplicates('address')
+    address_df = df.drop_duplicates('address')
 
     poi_df = pd.DataFrame(transform_list_of_dicts([
         get_nearby_places(API_KEY, row['address'], types)
-        for _, row in tqdm(df.iterrows(), total=len(df.index))
+        for _, row in tqdm(address_df.iterrows(), total=len(address_df.index))
     ]))
     out_df = pd.merge(df, poi_df, how='inner', on='address')
     out_df.to_csv('oto_points.csv', index=False)
