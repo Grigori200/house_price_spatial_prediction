@@ -4,7 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 
 
-def calculate_distance(coord1: tuple[int, int], coord2: tuple[int, int]) -> float:
+def calculate_distance(coord1: tuple[float, float], coord2: tuple[float, float]) -> float:
     return geodesic(coord1, coord2).meters
 
 
@@ -19,56 +19,75 @@ def transform_list_of_dicts(input_list: list[dict[str, int]]) -> dict[str, list[
     return result_dict
 
 
-def get_nearby_places(api_key: str, address: str, tags: list[str], radius: int = 500) -> dict:
-    results = {}
-
+def address2location(api_key: str, address: str) -> tuple[float, float]:
     geocoding_url = "https://maps.googleapis.com/maps/api/geocode/json"
     geocoding_params = {
         "address": address,
         "key": api_key,
     }
 
-    geocoding_response = requests.get(geocoding_url, params=geocoding_params)
+    geocoding_response = requests.get(geocoding_url, json=geocoding_params)
     geocoding_data = geocoding_response.json()
 
-    if geocoding_response.status_code == 200 and geocoding_data.get("status") == "OK":
-        location = geocoding_data["results"][0]["geometry"]["location"]
-        lat, lng = location["lat"], location["lng"]
+    if geocoding_response.status_code != 200 or geocoding_data.get("status") != "OK":
+        raise ValueError(f'Cannot find coordinates for {address}')
+
+    location = geocoding_data["results"][0]["geometry"]["location"]
+    return location['lat'], location['lng']
+
+
+def get_nearby_places(api_key: str, address: str, tags: list[str], radius: int = 1000) -> dict:
+    results = dict()
+    places_url = "https://places.googleapis.com/v1/places:searchNearby"
+
+    try:
+        lat, lng = address2location(api_key, address)
+        results['address'] = address
         results['lat'] = lat
         results['lng'] = lng
-        places_url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    except ValueError as e:
+        print(e)
+        return results
 
-        for type in tags:
-            counts = 0
-            closest = 1000
-            places_params = {
-                "key": api_key,
-                "location": f"{lat},{lng}",
-                "radius": radius,
-                "types": type
+    params = {
+        "locationRestriction": {
+            "circle": {
+                "center": {
+                    "latitude": lat,
+                    "longitude": lng
+                },
+                "radius": radius
             }
+        },
+        "rankPreference": "DISTANCE"
+    }
+    headers = {
+        "Content-Type": 'application/json',
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": 'places.location,places.rating'
+    }
 
-            places_response = requests.get(places_url, params=places_params)
-            places_data = places_response.json()
-            for place in places_data.get("results", []):
-                location = place.get("geometry", {}).get("location", {})
-                place_coord = (location.get("lat"), location.get("lng"))
-                distance = calculate_distance((lat, lng), place_coord)
-                rating = place.get("rating", 0)
+    for tag in tags:
+        params["includedTypes"] = [tag]
+        response = requests.post(places_url, json=params, headers=headers)
+        data = response.json()
+        places = data.get("places", [])
+        places = list(filter(lambda place: place.get('rating', 0) > 0, places))
+        shortest_path = None
 
-                if rating > 0:
-                    counts += 1
-                    closest = min(closest, distance)
-            results[type] = counts
-            results[f'{type}_closest'] = closest
-    else:
-        print("Geocoding request failed.")
+        if places:
+            nearest = places[0].get('location', dict())
+            coords = nearest.get("latitude"), nearest.get("longitude")
+            shortest_path = calculate_distance((lat, lng), coords)
+
+        results[tag] = len(places)
+        results[f'{tag}_closest'] = shortest_path
 
     return results
 
 
 if __name__ == "__main__":
-    api_key = 'your_key'
+    API_KEY = 'AIzaSyALXOQHgPQ8tR7spL1L7FL3F70vQJNRTUI'
     types = ['store',
              'school',
              'university',
@@ -83,8 +102,15 @@ if __name__ == "__main__":
              'train_station',
              'transit_station']
     df = pd.read_csv('oto.csv', index_col=0)
+    df = df.drop_duplicates('address')
 
-    out_df = pd.concat([df, pd.DataFrame(transform_list_of_dicts([
-        get_nearby_places(api_key, row['address'], types)
-        for _, row in tqdm(df.iterrows(), total=len(df.index))]))], axis=1)
+    poi_df = pd.DataFrame(transform_list_of_dicts([
+        get_nearby_places(API_KEY, row['address'], types)
+        for _, row in df.iterrows()  # tqdm(df.iterrows(), total=len(df.index))
+    ]))
+    print(poi_df.head())
+
+    out_df = pd.merge(df, poi_df, how='inner', on='address')
     out_df.to_csv('oto_points.csv', index=False)
+
+    print(out_df.head())
