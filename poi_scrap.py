@@ -26,11 +26,11 @@ def address2location(api_key: str, address: str) -> tuple[float, float]:
         "key": api_key,
     }
 
-    geocoding_response = requests.get(geocoding_url, json=geocoding_params)
+    geocoding_response = requests.get(geocoding_url, geocoding_params)
     geocoding_data = geocoding_response.json()
 
     if geocoding_response.status_code != 200 or geocoding_data.get("status") != "OK":
-        raise ValueError(f'Cannot find coordinates for {address}')
+        raise Exception(f'{geocoding_response.status_code} | {geocoding_data.get("status")} | Cannot find coordinates for {address}')
 
     location = geocoding_data["results"][0]["geometry"]["location"]
     return location['lat'], location['lng']
@@ -45,7 +45,7 @@ def get_nearby_places(api_key: str, address: str, tags: list[str], radius: int =
         results['address'] = address
         results['lat'] = lat
         results['lng'] = lng
-    except ValueError as e:
+    except Exception as e:
         print(e)
         return results
 
@@ -106,11 +106,7 @@ if __name__ == "__main__":
 
     poi_df = pd.DataFrame(transform_list_of_dicts([
         get_nearby_places(API_KEY, row['address'], types)
-        for _, row in df.iterrows()  # tqdm(df.iterrows(), total=len(df.index))
+        for _, row in tqdm(df.iterrows(), total=len(df.index))
     ]))
-    print(poi_df.head())
-
     out_df = pd.merge(df, poi_df, how='inner', on='address')
     out_df.to_csv('oto_points.csv', index=False)
-
-    print(out_df.head())
