@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup as bs
 from urllib.request import urlopen, Request
+from urllib.error import HTTPError
 import pandas as pd
 from tqdm import tqdm
 
@@ -23,7 +24,13 @@ def scrapp_otodom(url: str, max_pages: int):
     records = []
     for i in range(1, max_pages + 1):
         req = Request(f'{url}?page={i}', headers={'User-Agent': "Mozilla/5.0"})
-        sauce = urlopen(req).read()
+        try:
+            sauce = urlopen(req).read()
+        except HTTPError as e:
+            print(e)
+            print(f'Scrapping page {i} failed')
+            continue
+
         soup = bs(sauce, 'html5lib')
         results = soup.find('main').find('div', {'role': 'main'}).find('div', {'data-cy': 'search.listing.organic'}).findAll \
             ('li')

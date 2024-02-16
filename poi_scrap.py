@@ -87,7 +87,7 @@ def get_nearby_places(api_key: str, address: str, tags: list[str], radius: int =
 
 
 if __name__ == "__main__":
-    API_KEY = 'your_key'
+    API_KEY = 'AIzaSyALXOQHgPQ8tR7spL1L7FL3F70vQJNRTUI'
     types = ['store',
              'school',
              'university',

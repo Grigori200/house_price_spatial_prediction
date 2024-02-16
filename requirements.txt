@@ -1,8 +1,9 @@
-beautifulsoup4
+beautifulsoup4~=4.12.3
 html5lib
 httplib2
-requests
+requests~=2.31.0
 urllib3
-pandas
-tqdm
-geopy
+pandas~=2.1.4
+tqdm~=4.66.1
+geopy~=2.4.1
+torch
